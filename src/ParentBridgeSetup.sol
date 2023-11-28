@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity >=0.8.17;
+pragma solidity 0.8.21;
 
-import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
-import { Address } from "@openzeppelin/contracts/utils/Address.sol";
-import { ERC165Checker } from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {ERC165Checker} from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 
-import { IDAO } from "@aragon/osx/core/dao/IDAO.sol";
-import { DAO } from "@aragon/osx/core/dao/DAO.sol";
-import { PermissionLib } from "@aragon/osx/core/permission/PermissionLib.sol";
-import { PluginSetup, IPluginSetup } from "@aragon/osx/framework/plugin/setup/PluginSetup.sol";
+import {IDAO} from "@aragon/osx/core/dao/IDAO.sol";
+import {DAO} from "@aragon/osx/core/dao/DAO.sol";
+import {PermissionLib} from "@aragon/osx/core/permission/PermissionLib.sol";
+import {PluginSetup, IPluginSetup} from "@aragon/osx/framework/plugin/setup/PluginSetup.sol";
 
-import { ParentBridge } from "./ParentBridge.sol";
+import {ParentBridge} from "./ParentBridge.sol";
 
 contract ParentBridgeSetup is PluginSetup {
     using Address for address;
@@ -29,21 +29,23 @@ contract ParentBridgeSetup is PluginSetup {
     function prepareInstallation(
         address _dao,
         bytes calldata _data
-    )
-        external
-        returns (address plugin, PreparedSetupData memory preparedSetupData)
-    {
+    ) external returns (address plugin, PreparedSetupData memory preparedSetupData) {
         // Decode `_data` to extract the params needed for deploying and initializing `TokenVoting` plugin,
         // and the required helpers
-        (ParentBridge.BridgeSettings memory bridgeSettings) = abi.decode(_data, (ParentBridge.BridgeSettings));
+        ParentBridge.BridgeSettings memory bridgeSettings = abi.decode(
+            _data,
+            (ParentBridge.BridgeSettings)
+        );
 
         // Prepare and deploy plugin proxy.
         plugin = createERC1967Proxy(
-            address(parentBridgeBase), abi.encodeCall(ParentBridge.initialize, (IDAO(_dao), bridgeSettings))
+            address(parentBridgeBase),
+            abi.encodeCall(ParentBridge.initialize, (IDAO(_dao), bridgeSettings))
         );
 
         // Prepare permissions
-        PermissionLib.MultiTargetPermission[] memory permissions = new PermissionLib.MultiTargetPermission[](4);
+        PermissionLib.MultiTargetPermission[]
+            memory permissions = new PermissionLib.MultiTargetPermission[](4);
 
         // Set plugin permissions to be granted.
         // Grant the list of permissions of the plugin to the DAO.
@@ -87,11 +89,7 @@ contract ParentBridgeSetup is PluginSetup {
     function prepareUninstallation(
         address _dao,
         SetupPayload calldata _payload
-    )
-        external
-        view
-        returns (PermissionLib.MultiTargetPermission[] memory permissions)
-    {
+    ) external view returns (PermissionLib.MultiTargetPermission[] memory permissions) {
         permissions[0] = PermissionLib.MultiTargetPermission({
             operation: PermissionLib.Operation.Grant,
             where: _payload.plugin,
@@ -131,11 +129,9 @@ contract ParentBridgeSetup is PluginSetup {
         return address(parentBridgeBase);
     }
 
-    function encodeBridgeSettings(ParentBridge.BridgeSettings calldata _bridgeSettings)
-        external
-        pure
-        returns (bytes memory)
-    {
+    function encodeBridgeSettings(
+        ParentBridge.BridgeSettings calldata _bridgeSettings
+    ) external pure returns (bytes memory) {
         return abi.encode(_bridgeSettings);
     }
 }
