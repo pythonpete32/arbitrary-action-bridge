@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity >=0.8.17;
 
-import { SafeCastUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
-import { PluginUUPSUpgradeable } from "@aragon/osx/core/plugin/PluginUUPSUpgradeable.sol";
-import { IDAO } from "@aragon/osx/core/dao/IDAO.sol";
+import {SafeCastUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/math/SafeCastUpgradeable.sol";
+import {PluginUUPSUpgradeable} from "@aragon/osx/core/plugin/PluginUUPSUpgradeable.sol";
+import {IDAO} from "@aragon/osx/core/dao/IDAO.sol";
 
-import { ILayerZeroSender } from "./interfaces/ILayerZeroSender.sol";
-import { NonblockingLzApp } from "./lzApp/NonblockingLzApp.sol";
+import {ILayerZeroSender} from "./interfaces/ILayerZeroSender.sol";
+import {NonblockingLzApp} from "./lzApp/NonblockingLzApp.sol";
 
 contract ParentBridge is PluginUUPSUpgradeable, NonblockingLzApp {
     using SafeCastUpgradeable for uint256;
 
     /// @notice The ID of the permission required to call the `updateBridgeSettings` function.
-    bytes32 public constant UPDATE_BRIDGE_SETTINGS_PERMISSION_ID = keccak256("UPDATE_BRIDGE_SETTINGS_PERMISSION");
+    bytes32 public constant UPDATE_BRIDGE_SETTINGS_PERMISSION_ID =
+        keccak256("UPDATE_BRIDGE_SETTINGS_PERMISSION");
 
     /// @notice The ID of the permission required to call the `bridgeAction` function.
     bytes32 public constant BRIDGE_ROLE_ID = keccak256("BRIDGE_ROLE");
@@ -44,7 +45,10 @@ contract ParentBridge is PluginUUPSUpgradeable, NonblockingLzApp {
     error InvalidBridgeSettings(BridgeSettings bridgeSettings);
 
     event ActionBridged(
-        uint256 indexed actionsId, IDAO.Action[] actions, uint256 indexed allowFailureMap, bytes metadata
+        uint256 indexed actionsId,
+        IDAO.Action[] actions,
+        uint256 indexed allowFailureMap,
+        bytes metadata
     );
 
     /// @notice Initializes the component.
@@ -52,8 +56,10 @@ contract ParentBridge is PluginUUPSUpgradeable, NonblockingLzApp {
     /// @param _dao The IDAO interface of the associated DAO.
     function initialize(IDAO _dao, BridgeSettings memory _bridgeSettings) external initializer {
         if (
-            _bridgeSettings.bridge == address(0) || _bridgeSettings.chainId == uint16(0)
-                || _bridgeSettings.childDAO == address(0) || _bridgeSettings.childPlugin == address(0)
+            _bridgeSettings.bridge == address(0) ||
+            _bridgeSettings.chainId == uint16(0) ||
+            _bridgeSettings.childDAO == address(0) ||
+            _bridgeSettings.childPlugin == address(0)
         ) {
             revert BridgeSettingsNotSet();
         }
@@ -67,17 +73,19 @@ contract ParentBridge is PluginUUPSUpgradeable, NonblockingLzApp {
         bytes calldata _metadata,
         IDAO.Action[] calldata _actions,
         uint256 _allowFailureMap
-    )
-        external
-        payable
-        auth(BRIDGE_ROLE_ID)
-    {
+    ) external payable auth(BRIDGE_ROLE_ID) {
         // Bridge the proposal over to the L2
-        bytes memory encodedMessage = abi.encode(_actions, _allowFailureMap, _metadata, actionsId++);
+        bytes memory encodedMessage = abi.encode(
+            _actions,
+            _allowFailureMap,
+            _metadata,
+            actionsId++
+        );
 
         if (
-            bridgeSettings.bridge != address(0) || bridgeSettings.chainId != uint16(0)
-                || address(bridgeSettings.childDAO) != address(0)
+            bridgeSettings.bridge != address(0) ||
+            bridgeSettings.chainId != uint16(0) ||
+            address(bridgeSettings.childDAO) != address(0)
         ) {
             _lzSend({
                 _dstChainId: bridgeSettings.chainId,
@@ -94,24 +102,22 @@ contract ParentBridge is PluginUUPSUpgradeable, NonblockingLzApp {
 
     /// @notice Updates the bridge settings.
     /// @param _bridgeSettings The new voting settings.
-    function updateBridgeSettings(BridgeSettings calldata _bridgeSettings)
-        external
-        virtual
-        auth(UPDATE_BRIDGE_SETTINGS_PERMISSION_ID)
-    {
+    function updateBridgeSettings(
+        BridgeSettings calldata _bridgeSettings
+    ) external virtual auth(UPDATE_BRIDGE_SETTINGS_PERMISSION_ID) {
         bridgeSettings = _bridgeSettings;
         _setEndpoint(_bridgeSettings.bridge);
-        bytes memory remoteAndLocalAddresses = abi.encodePacked(_bridgeSettings.childPlugin, address(this));
+        bytes memory remoteAndLocalAddresses = abi.encodePacked(
+            _bridgeSettings.childPlugin,
+            address(this)
+        );
         _setTrustedRemoteAddress(_bridgeSettings.chainId, remoteAndLocalAddresses);
     }
 
     function _nonblockingLzReceive(
-        uint16 _srcChainId,
-        bytes memory _srcAddress,
-        uint64, /*_nonce*/
-        bytes memory _payload
-    )
-        internal
-        override
-    { }
+        uint16 /*_srcChainId*/,
+        bytes memory /*_srcAddress*/,
+        uint64 /*_nonce*/,
+        bytes memory /*_pyload*/
+    ) internal override {}
 }
