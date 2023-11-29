@@ -17,84 +17,53 @@ import {IPluginSetup, PluginSetup} from "@aragon/osx/framework/plugin/setup/Plug
 
 import {ILayerZeroSender} from "../src/interfaces/ILayerZeroSender.sol";
 
-// import {L1TokenVotingSetup} from "../src/L1TokenVotingSetup.sol";
-// import {L1MajorityVotingBase} from "../src/L1MajorityVotingBase.sol";
-// import {L1TokenVoting} from "../src/L1TokenVoting.sol";
+import {ParentBridge} from "../src/ParentBridge.sol";
+import {ParentBridgeSetup} from "../src/ParentBridgeSetup.sol";
+import {ChildBridge} from "../src/ChildBridge.sol";
+import {ChildBridgeSetup} from "../src/ChildBridgeSetup.sol";
 
-// import {L2TokenVotingSetup} from "../src/L2TokenVotingSetup.sol";
-// import {L2MajorityVotingBase} from "../src/L2MajorityVotingBase.sol";
-// import {L2TokenVoting} from "../src/L2TokenVoting.sol";
-// import {IL2MajorityVoting} from "../src/interfaces/IL2MajorityVoting.sol";
-// import {NonblockingLzDAOProxy} from "../src/NonblockingLzDAOProxy.sol";
-
-// import {GovernanceERC20} from "@aragon/osx/token/ERC20/governance/GovernanceERC20.sol";
-// import {GovernanceWrappedERC20} from "@aragon/osx/token/ERC20/governance/GovernanceWrappedERC20.sol";
-
-// import {LZEndpointMock} from "./mocks/LayerZeroBridgeMock.sol";
+import {LZEndpointMock} from "./mocks/LayerZeroBridgeMock.sol";
 
 abstract contract L1TokenVotingTest is AragonTest {
-    DAO internal dao;
-    // L1TokenVoting internal plugin;
-    // L1TokenVotingSetup internal setup;
-    // GovernanceERC20 l1governanceERC20Base;
-    // GovernanceERC20 l2governanceERC20Base;
-    // GovernanceWrappedERC20 governanceWrappedERC20Base;
-    // LZEndpointMock l1Bridge;
-    // LZEndpointMock l2Bridge;
-    // NonblockingLzDAOProxy l2daoProxy;
+    DAO internal parentDao;
+    DAO internal childDao;
 
-    DAO internal l2dao;
-    // L2TokenVoting internal l2plugin;
-    // L2TokenVotingSetup internal l2setup;
-    // address bob = address(0xb0b);
-    // address dad = address(0xdad);
-    // address dead = address(0xdead);
+    ParentBridge internal parentBridge;
+    ParentBridgeSetup internal parentSetup;
 
-    // function setUpL1() public virtual {
-    //     vm.deal(bob, 10 ether);
-    //     vm.deal(dad, 10 ether);
-    //     vm.roll(1);
-    //     address[] memory holders = new address[](1);
-    //     holders[0] = bob;
-    //     uint256[] memory holdersAmount = new uint256[](1);
-    //     holdersAmount[0] = 10 ether;
-    //     l1governanceERC20Base = new GovernanceERC20(
-    //         DAO(payable(dead)),
-    //         "Dead",
-    //         "DED",
-    //         GovernanceERC20.MintSettings(holders, holdersAmount)
-    //     );
-    //     governanceWrappedERC20Base = new GovernanceWrappedERC20(
-    //         IERC20Upgradeable(address(l1governanceERC20Base)),
-    //         "Dead",
-    //         "DED"
-    //     );
+    ChildBridge internal childBridge;
+    ChildBridgeSetup internal childSetup;
 
-    //     L1MajorityVotingBase.VotingSettings memory votingSettings = L1MajorityVotingBase
-    //         .VotingSettings(
-    //             L1MajorityVotingBase.VotingMode.EarlyExecution,
-    //             uint32(0),
-    //             uint32(1),
-    //             61 minutes,
-    //             uint256(0)
-    //         );
+    LZEndpointMock l1Bridge;
+    LZEndpointMock l2Bridge;
 
-    //     L1TokenVotingSetup.TokenSettings memory tokenSettings = L1TokenVotingSetup.TokenSettings(
-    //         address(l1governanceERC20Base),
-    //         "",
-    //         ""
-    //     );
-    //     address[] memory receivers = new address[](1);
-    //     receivers[0] = bob;
-    //     uint256[] memory amounts = new uint256[](1);
-    //     amounts[0] = 10 ether;
-    //     GovernanceERC20.MintSettings memory mintSettings = GovernanceERC20.MintSettings(
-    //         receivers,
-    //         amounts
-    //     );
+    address bob = address(0xb0b);
+    address dad = address(0xdad);
+    address dead = address(0xdead);
 
-    //     setup = new L1TokenVotingSetup(l1governanceERC20Base, governanceWrappedERC20Base);
-    //     bytes memory setupData = abi.encode(votingSettings, tokenSettings, mintSettings);
+    function setUpL1() public virtual {
+        vm.deal(bob, 10 ether);
+        vm.deal(dad, 10 ether);
+        vm.roll(1);
+        address[] memory holders = new address[](1);
+        holders[0] = bob;
+        uint256[] memory holdersAmount = new uint256[](1);
+        holdersAmount[0] = 10 ether;
+
+        ParentBridge.BridgeSettings memory parentBridgeSettings = ParentBridge.BridgeSettings({
+            chainId: 1, // child is on mainnet
+            bridge: address(l2Bridge), // we are on polygon
+            childDAO: address(childDao), // child dao
+            childPlugin: address(childBridge) // child plugin
+        });
+
+        parentSetup = new ParentBridgeSetup();
+        bytes memory setupData = parentSetup.encodeSetupData(parentBridgeSettings);
+
+        (DAO _parentDao, address _plugin) = createMockDaoWithPlugin(parentSetup, setupData);
+        parentDao = _parentDao;
+        parentBridge = ParentBridge(_plugin);
+    }
 
     //     (
     //         DAO _dao,

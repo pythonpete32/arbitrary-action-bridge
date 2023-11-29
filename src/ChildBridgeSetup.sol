@@ -2,19 +2,19 @@
 
 pragma solidity ^0.8.21;
 
-import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
-import { Address } from "@openzeppelin/contracts/utils/Address.sol";
-import { ERC165Checker } from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {ERC165Checker} from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 
-import { IDAO } from "@aragon/osx/core/dao/IDAO.sol";
-import { DAO } from "@aragon/osx/core/dao/DAO.sol";
-import { PermissionLib } from "@aragon/osx/core/permission/PermissionLib.sol";
-import { PluginSetup, IPluginSetup } from "@aragon/osx/framework/plugin/setup/PluginSetup.sol";
+import {IDAO} from "@aragon/osx/core/dao/IDAO.sol";
+import {DAO} from "@aragon/osx/core/dao/DAO.sol";
+import {PermissionLib} from "@aragon/osx/core/permission/PermissionLib.sol";
+import {PluginSetup, IPluginSetup} from "@aragon/osx/framework/plugin/setup/PluginSetup.sol";
 
-import { ILayerZeroEndpoint } from "./interfaces/ILayerZeroEndpoint.sol";
-import { ChildBridge } from "./ChildBridge.sol";
+import {ILayerZeroEndpoint} from "./interfaces/ILayerZeroEndpoint.sol";
+import {ChildBridge} from "./ChildBridge.sol";
 
-contract L2TokenVotingSetup is PluginSetup {
+contract ChildBridgeSetup is PluginSetup {
     using Address for address;
     using Clones for address;
     using ERC165Checker for address;
@@ -26,17 +26,19 @@ contract L2TokenVotingSetup is PluginSetup {
     function prepareInstallation(
         address _dao,
         bytes calldata _data
-    )
-        external
-        returns (address plugin, PreparedSetupData memory preparedSetupData)
-    {
-        (ILayerZeroEndpoint lzBridge, address parentDAO) = abi.decode(_data, (ILayerZeroEndpoint, address));
-
-        plugin = createERC1967Proxy(
-            address(childBridgeBase), abi.encodeCall(ChildBridge.initialize, (IDAO(_dao), lzBridge, parentDAO))
+    ) external returns (address plugin, PreparedSetupData memory preparedSetupData) {
+        (ILayerZeroEndpoint lzBridge, address parentDAO) = abi.decode(
+            _data,
+            (ILayerZeroEndpoint, address)
         );
 
-        PermissionLib.MultiTargetPermission[] memory permissions = new PermissionLib.MultiTargetPermission[](1);
+        plugin = createERC1967Proxy(
+            address(childBridgeBase),
+            abi.encodeCall(ChildBridge.initialize, (IDAO(_dao), lzBridge, parentDAO))
+        );
+
+        PermissionLib.MultiTargetPermission[]
+            memory permissions = new PermissionLib.MultiTargetPermission[](1);
 
         permissions[0] = PermissionLib.MultiTargetPermission({
             operation: PermissionLib.Operation.Grant,
@@ -53,11 +55,7 @@ contract L2TokenVotingSetup is PluginSetup {
     function prepareUninstallation(
         address _dao,
         SetupPayload calldata _payload
-    )
-        external
-        view
-        returns (PermissionLib.MultiTargetPermission[] memory permissions)
-    {
+    ) external view returns (PermissionLib.MultiTargetPermission[] memory permissions) {
         permissions = new PermissionLib.MultiTargetPermission[](1);
 
         permissions[0] = PermissionLib.MultiTargetPermission({
@@ -74,7 +72,10 @@ contract L2TokenVotingSetup is PluginSetup {
         return address(childBridgeBase);
     }
 
-    function encodeSettings(ILayerZeroEndpoint lzBridge, address parentDAO) external pure returns (bytes memory) {
+    function encodeSettings(
+        ILayerZeroEndpoint lzBridge,
+        address parentDAO
+    ) external pure returns (bytes memory) {
         return abi.encode(lzBridge, parentDAO);
     }
 }

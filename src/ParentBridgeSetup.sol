@@ -129,9 +129,9 @@ contract ParentBridgeSetup is PluginSetup {
         return address(parentBridgeBase);
     }
 
-    function encodeBridgeSettings(
+    function encodeSetupData(
         ParentBridge.BridgeSettings calldata _bridgeSettings
-    ) external pure returns (bytes memory) {
+    ) public pure returns (bytes memory) {
         return abi.encode(_bridgeSettings);
     }
 }
