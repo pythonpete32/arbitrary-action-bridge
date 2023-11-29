@@ -64,7 +64,7 @@ abstract contract AABBase is AragonTest {
     function setupParent() public virtual {
         ParentBridge.BridgeSettings memory parentBridgeSettings = ParentBridge.BridgeSettings({
             chainId: 1, // child is on mainnet
-            bridge: address(mainnetBridge), // we are on polygon
+            bridge: address(polygonBridge), // we are on polygon
             childDAO: address(childDao), // child dao
             childPlugin: address(childBridgePlugin) // child plugin
         });
@@ -83,7 +83,7 @@ abstract contract AABBase is AragonTest {
 
     function setupChild() public virtual {
         childSetup = new ChildBridgeSetup();
-        bytes memory setupData = childSetup.encodeSetupData(polygonBridge);
+        bytes memory setupData = childSetup.encodeSetupData(mainnetBridge);
 
         (DAO _childDao, address _plugin) = createMockDaoWithPlugin(childSetup, setupData);
         childDao = _childDao;
@@ -96,21 +96,16 @@ abstract contract AABBase is AragonTest {
     function postSetup() public virtual {
         vm.prank(address(childDao));
 
-        // TODO:
-        // parent should be on polygon and child should be on mainnet so im not sure why 1 is needed here
-        // Maybe its to do with the fact that the actual chain is 1 because its a fork????
-        // The issue here is this is supposed to be the REMOTE chain id, when its actually the local chain id
-        // This maybe to do with line 67. i think we have the LzBridges wrong way around
         childBridgePlugin.setParentPluginBridge({
             _parentPluginBridge: address(parentBridgePlugin),
-            _remoteChainId: 1
+            _remoteChainId: 137
         });
 
         weth.mint(address(childDao), 100 ether);
 
         // the child dao is on mainnet
-        mainnetBridge.setDestLzEndpoint(address(childBridgePlugin), address(polygonBridge));
-        polygonBridge.setDestLzEndpoint(address(parentBridgePlugin), address(mainnetBridge));
+        mainnetBridge.setDestLzEndpoint(address(parentBridgePlugin), address(polygonBridge));
+        polygonBridge.setDestLzEndpoint(address(childBridgePlugin), address(mainnetBridge));
     }
 }
 
