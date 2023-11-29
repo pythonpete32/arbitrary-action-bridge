@@ -2,6 +2,8 @@
 
 pragma solidity >=0.8.17;
 
+import {console2} from "forge-std/console2.sol";
+
 import {ILayerZeroReceiver} from "../interfaces/ILayerZeroReceiver.sol";
 import {ILayerZeroEndpoint} from "../interfaces/ILayerZeroEndpoint.sol";
 import {ILayerZeroUserApplicationConfig} from "../interfaces/ILayerZeroUserApplicationConfig.sol";
@@ -23,6 +25,8 @@ abstract contract LzApp is OwnableUpgradeable, ILayerZeroReceiver, ILayerZeroUse
     mapping(uint16 => uint) public payloadSizeLimitLookup;
     address public precrime;
 
+    error InvalidSendingSource(address trusted, address actual);
+
     event SetPrecrime(address precrime);
     event SetTrustedRemote(uint16 _remoteChainId, bytes _path);
     event SetTrustedRemoteAddress(uint16 _remoteChainId, bytes _remoteAddress);
@@ -38,17 +42,26 @@ abstract contract LzApp is OwnableUpgradeable, ILayerZeroReceiver, ILayerZeroUse
         uint64 _nonce,
         bytes calldata _payload
     ) public virtual override {
+        console2.log("LzApp: lzReceive");
+        console2.log("LzApp: _srcChainId", _srcChainId);
+        console2.log("LzApp: _srcAddress", bytesToAddress(_srcAddress));
+        console2.log("LzApp: _nonce", _nonce);
+
         // lzReceive must be called by the endpoint for security
         require(_msgSender() == address(lzEndpoint), "LzApp: invalid endpoint caller");
 
         bytes memory trustedRemote = trustedRemoteLookup[_srcChainId];
         // if will still block the message pathway from (srcChainId, srcAddress). should not receive message from untrusted remote.
-        require(
-            _srcAddress.length == trustedRemote.length &&
-                trustedRemote.length > 0 &&
-                keccak256(_srcAddress) == keccak256(trustedRemote),
-            "LzApp: invalid source sending contract"
-        );
+        if (
+            _srcAddress.length != trustedRemote.length ||
+            trustedRemote.length <= 0 ||
+            keccak256(_srcAddress) != keccak256(trustedRemote)
+        ) {
+            revert InvalidSendingSource({
+                trusted: bytesToAddress(trustedRemote),
+                actual: bytesToAddress(_srcAddress)
+            });
+        }
 
         _blockingLzReceive(_srcChainId, _srcAddress, _nonce, _payload);
     }
@@ -186,5 +199,11 @@ abstract contract LzApp is OwnableUpgradeable, ILayerZeroReceiver, ILayerZeroUse
     ) external view returns (bool) {
         bytes memory trustedSource = trustedRemoteLookup[_srcChainId];
         return keccak256(trustedSource) == keccak256(_srcAddress);
+    }
+}
+
+function bytesToAddress(bytes memory bys) pure returns (address addr) {
+    assembly {
+        addr := mload(add(bys, 20))
     }
 }

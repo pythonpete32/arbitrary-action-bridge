@@ -10,18 +10,23 @@ import {ILayerZeroEndpoint} from "./interfaces/ILayerZeroEndpoint.sol";
 contract ChildBridge is PluginUUPSUpgradeable, NonblockingLzApp {
     bytes32 public constant SET_PARENT_DAO_ROLE = keccak256("SET_PARENT_DAO_ROLE");
 
-    address public parentDao;
+    address public parentBridgePlugin;
 
     function initialize(IDAO _dao, ILayerZeroEndpoint lzBridge) external initializer {
         __PluginUUPSUpgradeable_init(_dao);
 
         _setEndpoint(address(lzBridge));
-        bytes memory remoteAndLocalAddresses = abi.encodePacked(parentDao, address(this));
-        _setTrustedRemoteAddress(1, remoteAndLocalAddresses);
+        // bytes memory remoteAndLocalAddresses = abi.encodePacked(parentDao, address(this));
+        // _setTrustedRemoteAddress(1, remoteAndLocalAddresses);
     }
 
-    function setParentDao(address _parentDao) external auth(SET_PARENT_DAO_ROLE) {
-        parentDao = _parentDao;
+    function setParentPluginBridge(
+        address _parentPluginBridge,
+        uint16 _remoteChainId
+    ) external auth(SET_PARENT_DAO_ROLE) {
+        parentBridgePlugin = _parentPluginBridge;
+        bytes memory remoteAndLocalAddresses = abi.encodePacked(parentBridgePlugin, address(this));
+        _setTrustedRemoteAddress(_remoteChainId, remoteAndLocalAddresses);
     }
 
     function _nonblockingLzReceive(

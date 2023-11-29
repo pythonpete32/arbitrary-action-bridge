@@ -64,8 +64,15 @@ contract ParentBridge is PluginUUPSUpgradeable, NonblockingLzApp {
             revert BridgeSettingsNotSet();
         }
         __PluginUUPSUpgradeable_init(_dao);
-        bridgeSettings = _bridgeSettings;
 
+        _setEndpoint(address(_bridgeSettings.bridge));
+        bytes memory remoteAndLocalAddresses = abi.encodePacked(
+            _bridgeSettings.childPlugin,
+            address(this)
+        );
+        _setTrustedRemoteAddress(_bridgeSettings.chainId, remoteAndLocalAddresses);
+
+        bridgeSettings = _bridgeSettings;
         actionsId = 1;
     }
 

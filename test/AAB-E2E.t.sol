@@ -30,10 +30,10 @@ abstract contract AABBase is AragonTest {
     DAO internal parentDao;
     DAO internal childDao;
 
-    ParentBridge internal parentBridge;
+    ParentBridge internal parentBridgePlugin;
     ParentBridgeSetup internal parentSetup;
 
-    ChildBridge internal childBridge;
+    ChildBridge internal childBridgePlugin;
     ChildBridgeSetup internal childSetup;
 
     LZEndpointMock polygonBridge;
@@ -48,7 +48,13 @@ abstract contract AABBase is AragonTest {
     function setUp() public virtual {
         polygonBridge = new LZEndpointMock(137);
         mainnetBridge = new LZEndpointMock(1);
+        console2.log("polygonBridge", address(polygonBridge));
+        console2.log("mainnetBridge", address(mainnetBridge));
+
         weth = new MockToken("Wraped Ether", "WETH");
+        vm.label(address(weth), "WETH");
+        vm.label(address(polygonBridge), "PolygonBridge");
+        vm.label(address(mainnetBridge), "MainnetBridge");
 
         setupChild();
         setupParent();
@@ -60,15 +66,19 @@ abstract contract AABBase is AragonTest {
             chainId: 1, // child is on mainnet
             bridge: address(mainnetBridge), // we are on polygon
             childDAO: address(childDao), // child dao
-            childPlugin: address(childBridge) // child plugin
+            childPlugin: address(childBridgePlugin) // child plugin
         });
 
         parentSetup = new ParentBridgeSetup();
         bytes memory setupData = parentSetup.encodeSetupData(parentBridgeSettings);
 
         (DAO _parentDao, address _plugin) = createMockDaoWithPlugin(parentSetup, setupData);
+
         parentDao = _parentDao;
-        parentBridge = ParentBridge(_plugin);
+        parentBridgePlugin = ParentBridge(_plugin);
+        vm.deal(address(parentDao), 100 ether);
+        vm.label(address(parentDao), "ParentDAO");
+        vm.label(address(parentBridgePlugin), "ParentBridgePlugin");
     }
 
     function setupChild() public virtual {
@@ -77,25 +87,38 @@ abstract contract AABBase is AragonTest {
 
         (DAO _childDao, address _plugin) = createMockDaoWithPlugin(childSetup, setupData);
         childDao = _childDao;
-        childBridge = ChildBridge(_plugin);
+        childBridgePlugin = ChildBridge(_plugin);
+
+        vm.label(address(childDao), "ChildDAO");
+        vm.label(address(childBridgePlugin), "ChildBridgePlugin");
     }
 
     function postSetup() public virtual {
         vm.prank(address(childDao));
-        childBridge.setParentDao(address(parentDao));
+
+        // TODO:
+        // parent should be on polygon and child should be on mainnet so im not sure why 1 is needed here
+        // Maybe its to do with the fact that the actual chain is 1 because its a fork????
+        // The issue here is this is supposed to be the REMOTE chain id, when its actually the local chain id
+        // This maybe to do with line 67. i think we have the LzBridges wrong way around
+        childBridgePlugin.setParentPluginBridge({
+            _parentPluginBridge: address(parentBridgePlugin),
+            _remoteChainId: 1
+        });
 
         weth.mint(address(childDao), 100 ether);
 
-        mainnetBridge.setDestLzEndpoint(address(parentBridge), address(polygonBridge));
-        polygonBridge.setDestLzEndpoint(address(childBridge), address(mainnetBridge));
+        // the child dao is on mainnet
+        mainnetBridge.setDestLzEndpoint(address(childBridgePlugin), address(polygonBridge));
+        polygonBridge.setDestLzEndpoint(address(parentBridgePlugin), address(mainnetBridge));
     }
 }
 
 contract AAB_InitTests is AABBase {
     function test_initialize() public {
-        assertEq(address(parentBridge.dao()), address(parentDao));
-        assertEq(address(childBridge.dao()), address(childDao));
-        assertEq(address(childBridge.parentDao()), address(parentDao));
+        assertEq(address(parentBridgePlugin.dao()), address(parentDao));
+        assertEq(address(childBridgePlugin.dao()), address(childDao));
+        assertEq(address(childBridgePlugin.parentBridgePlugin()), address(parentBridgePlugin));
     }
 
     function test_reverts_if_reinitialized() public {
@@ -103,14 +126,14 @@ contract AAB_InitTests is AABBase {
             chainId: 1, // child is on mainnet
             bridge: address(mainnetBridge), // we are on polygon
             childDAO: address(childDao), // child dao
-            childPlugin: address(childBridge) // child plugin
+            childPlugin: address(childBridgePlugin) // child plugin
         });
 
         vm.expectRevert("Initializable: contract is already initialized");
-        parentBridge.initialize(parentDao, parentBridgeSettings);
+        parentBridgePlugin.initialize(parentDao, parentBridgeSettings);
 
         vm.expectRevert("Initializable: contract is already initialized");
-        childBridge.initialize(childDao, polygonBridge);
+        childBridgePlugin.initialize(childDao, polygonBridge);
     }
 }
 
@@ -123,62 +146,17 @@ contract AAB_ExecuteChildFromParent is AABBase {
             data: abi.encodeCall(ERC20.transfer, (bob, 10 ether))
         });
 
-        vm.prank(address(parentDao));
-        parentBridge.bridgeAction({
+        console2.log("parentDao", address(parentDao));
+        console2.log("this contract", address(this));
+        vm.startPrank(address(parentDao));
+        // This is on polygon(parent) sending to mainnet (child)
+        parentBridgePlugin.bridgeAction{value: 0.5 ether}({
             _metadata: abi.encodePacked("Transfer 10 WETH to Bob"),
             _actions: actions,
             _allowFailureMap: 0
         });
+        vm.stopPrank();
 
         assertEq(weth.balanceOf(bob), 10 ether);
     }
 }
-
-//     function test_FirstProposalBeingBridged() public {
-//         console2.log(address(dao));
-//         console2.log(address(plugin));
-//         console2.log(address(l2dao));
-//         console2.log(address(l2plugin));
-//         console2.log(address(l1Bridge));
-//         console2.log(address(l2Bridge));
-//         vm.startPrank(bob);
-//         vm.warp(block.timestamp + 100);
-//         vm.roll(block.number + 2);
-//         bytes memory _metadata = abi.encodeWithSelector(
-//             L1TokenVoting.updateBridgeSettings.selector,
-//             uint16(1), // Or other chain really
-//             address(l1Bridge),
-//             address(l2dao),
-//             address(l2plugin)
-//         );
-//         IDAO.Action[] memory _actions = new IDAO.Action[](0);
-//         uint256 _allowFailureMap = 0;
-//         uint64 _startDate = uint64(block.timestamp);
-//         uint64 _endDate = uint64(block.timestamp + 5000);
-
-//         L1MajorityVotingBase.VoteOption _voteOption = IMajorityVoting.VoteOption.Yes;
-//         bool _tryEarlyExecution = true;
-//         uint256 proposalId = plugin.createProposal{value: 0.5 ether}(
-//             _metadata, _actions, _allowFailureMap, _startDate, _endDate, _voteOption, _tryEarlyExecution
-//         );
-
-//         assertEq(proposalId, uint256(1), "ProposalId is not correct");
-//         vm.stopPrank();
-//         vm.startPrank(dad);
-//         l2plugin.vote(0, IL2MajorityVoting.VoteOption.Yes);
-//         l2plugin.execute{value: 0.5 ether}(0);
-//         vm.stopPrank();
-
-//         (
-//             bool open,
-//             uint256 parentProposalId,
-//             bool executed,
-//             L2MajorityVotingBase.ProposalParameters memory parameters,
-//             L2MajorityVotingBase.Tally memory tally
-//         ) = l2plugin.getProposal(0);
-
-//         assertEq(open, false);
-//         assertEq(parentProposalId, uint256(1));
-//         assertEq(tally.yes, 10 ether);
-//     }
-// }
