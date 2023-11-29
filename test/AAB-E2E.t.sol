@@ -3,6 +3,7 @@ pragma solidity 0.8.21;
 
 import {console2} from "forge-std/console2.sol";
 
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {IERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import {DAO} from "@aragon/osx/core/dao/DAO.sol";
@@ -23,8 +24,9 @@ import {ChildBridge} from "../src/ChildBridge.sol";
 import {ChildBridgeSetup} from "../src/ChildBridgeSetup.sol";
 
 import {LZEndpointMock} from "./mocks/LayerZeroBridgeMock.sol";
+import {MockToken} from "./mocks/MockToken.sol";
 
-abstract contract L1TokenVotingTest is AragonTest {
+abstract contract AABBase is AragonTest {
     DAO internal parentDao;
     DAO internal childDao;
 
@@ -34,25 +36,29 @@ abstract contract L1TokenVotingTest is AragonTest {
     ChildBridge internal childBridge;
     ChildBridgeSetup internal childSetup;
 
-    LZEndpointMock l1Bridge;
-    LZEndpointMock l2Bridge;
+    LZEndpointMock polygonBridge;
+    LZEndpointMock mainnetBridge;
+
+    MockToken internal weth;
 
     address bob = address(0xb0b);
     address dad = address(0xdad);
     address dead = address(0xdead);
 
-    function setUpL1() public virtual {
-        vm.deal(bob, 10 ether);
-        vm.deal(dad, 10 ether);
-        vm.roll(1);
-        address[] memory holders = new address[](1);
-        holders[0] = bob;
-        uint256[] memory holdersAmount = new uint256[](1);
-        holdersAmount[0] = 10 ether;
+    function setUp() public virtual {
+        polygonBridge = new LZEndpointMock(137);
+        mainnetBridge = new LZEndpointMock(1);
+        weth = new MockToken("Wraped Ether", "WETH");
 
+        setupChild();
+        setupParent();
+        postSetup();
+    }
+
+    function setupParent() public virtual {
         ParentBridge.BridgeSettings memory parentBridgeSettings = ParentBridge.BridgeSettings({
             chainId: 1, // child is on mainnet
-            bridge: address(l2Bridge), // we are on polygon
+            bridge: address(mainnetBridge), // we are on polygon
             childDAO: address(childDao), // child dao
             childPlugin: address(childBridge) // child plugin
         });
@@ -65,152 +71,68 @@ abstract contract L1TokenVotingTest is AragonTest {
         parentBridge = ParentBridge(_plugin);
     }
 
-    //     (
-    //         DAO _dao,
-    //         address _plugin,
-    //         PluginSetup.PreparedSetupData memory _preparedSetupData
-    //     ) = createMockDaoWithPlugin(setup, setupData);
+    function setupChild() public virtual {
+        childSetup = new ChildBridgeSetup();
+        bytes memory setupData = childSetup.encodeSetupData(polygonBridge);
 
-    //     dao = _dao;
-    //     plugin = L1TokenVoting(_plugin);
-    //     l1Bridge = new LZEndpointMock(uint16(1));
-    //     l2Bridge = new LZEndpointMock(uint16(5));
-    //     l2Bridge.setDestLzEndpoint(address(plugin), address(l1Bridge));
-    //     assertEq(
-    //         address(plugin.getVotingToken()),
-    //         address(l1governanceERC20Base),
-    //         "Token is not set properly"
-    //     );
-    // }
+        (DAO _childDao, address _plugin) = createMockDaoWithPlugin(childSetup, setupData);
+        childDao = _childDao;
+        childBridge = ChildBridge(_plugin);
+    }
 
-    // function setUpL2() public virtual {
-    //     address[] memory holders = new address[](1);
-    //     holders[0] = dad;
-    //     uint256[] memory holdersAmount = new uint256[](1);
-    //     holdersAmount[0] = 10 ether;
-    //     l2governanceERC20Base = new GovernanceERC20(
-    //         DAO(payable(dead)),
-    //         "Dead",
-    //         "DED",
-    //         GovernanceERC20.MintSettings(holders, holdersAmount)
-    //     );
-    //     governanceWrappedERC20Base = new GovernanceWrappedERC20(
-    //         IERC20Upgradeable(address(l2governanceERC20Base)),
-    //         "Dead",
-    //         "DED"
-    //     );
+    function postSetup() public virtual {
+        vm.prank(address(childDao));
+        childBridge.setParentDao(address(parentDao));
 
-    //     L2MajorityVotingBase.VotingSettings memory votingSettings = L2MajorityVotingBase
-    //         .VotingSettings(
-    //             L2MajorityVotingBase.VotingMode.EarlyExecution,
-    //             uint32(0),
-    //             uint32(1),
-    //             61 minutes,
-    //             uint256(0)
-    //         );
+        weth.mint(address(childDao), 100 ether);
 
-    //     L2TokenVotingSetup.TokenSettings memory tokenSettings = L2TokenVotingSetup.TokenSettings(
-    //         address(l2governanceERC20Base),
-    //         "",
-    //         ""
-    //     );
-    //     address[] memory receivers = new address[](1);
-    //     receivers[0] = dad;
-    //     uint256[] memory amounts = new uint256[](1);
-    //     amounts[0] = 10 ether;
-    //     GovernanceERC20.MintSettings memory mintSettings = GovernanceERC20.MintSettings(
-    //         receivers,
-    //         amounts
-    //     );
-
-    //     L2MajorityVotingBase.BridgeDAOSettings memory bridgeDAOSettings = L2MajorityVotingBase
-    //         .BridgeDAOSettings(address(dao), address(plugin), l2Bridge);
-
-    //     l2setup = new L2TokenVotingSetup(l2governanceERC20Base, governanceWrappedERC20Base);
-    //     bytes memory setupData = abi.encode(
-    //         votingSettings,
-    //         tokenSettings,
-    //         mintSettings,
-    //         bridgeDAOSettings
-    //     );
-
-    //     (
-    //         DAO _dao,
-    //         address _l2plugin,
-    //         PluginSetup.PreparedSetupData memory preparedSetupData
-    //     ) = createMockDaoWithPlugin(l2setup, setupData);
-
-    //     l2dao = _dao;
-    //     l2plugin = L2TokenVoting(_l2plugin);
-    //     l2daoProxy = NonblockingLzDAOProxy(preparedSetupData.helpers[1]);
-    //     l1Bridge.setDestLzEndpoint(address(l2plugin), address(l2Bridge));
-    // }
-
-    // function setUpPostInstallation() public virtual {
-    //     vm.startPrank(bob);
-    //     l1governanceERC20Base.delegate(bob);
-    //     vm.warp(block.timestamp + 100);
-    //     vm.roll(block.number + 2);
-    //     bytes memory _metadata = abi.encodeWithSelector(
-    //         L1TokenVoting.updateBridgeSettings.selector,
-    //         uint16(5), // Or other chain really
-    //         address(l1Bridge),
-    //         address(l2dao),
-    //         address(l2plugin)
-    //     );
-    //     IDAO.Action[] memory _actions = new IDAO.Action[](1);
-    //     _actions[0] = IDAO.Action(address(plugin), 0, _metadata);
-    //     uint256 _allowFailureMap = 0;
-    //     uint64 _startDate = uint64(block.timestamp);
-    //     uint64 _endDate = uint64(block.timestamp + 5000);
-    //     L1MajorityVotingBase.VoteOption _voteOption = IMajorityVoting.VoteOption.Yes;
-    //     bool _tryEarlyExecution = true;
-    //     uint256 proposalId = plugin.createProposal{value: 0.5 ether}(
-    //         _metadata,
-    //         _actions,
-    //         _allowFailureMap,
-    //         _startDate,
-    //         _endDate,
-    //         _voteOption,
-    //         _tryEarlyExecution
-    //     );
-
-    //     (
-    //         bool open,
-    //         bool executed,
-    //         L1MajorityVotingBase.ProposalParameters memory params,
-    //         L1MajorityVotingBase.Tally memory tally,
-    //         IDAO.Action[] memory actions,
-    //         uint256 allowFailureMap
-    //     ) = plugin.getProposal(proposalId);
-
-    //     (uint16 chainId, address _bridge, address _dao, address _childPlugin) = plugin
-    //         .bridgeSettings();
-
-    //     assertEq(_bridge, address(l1Bridge), "Bridge is not properly set");
-    //     vm.stopPrank();
-    // }
+        mainnetBridge.setDestLzEndpoint(address(parentBridge), address(polygonBridge));
+        polygonBridge.setDestLzEndpoint(address(childBridge), address(mainnetBridge));
+    }
 }
 
-// contract L1TokenVotingInitializeTest is L1TokenVotingTest {
-//     function setUp() public {
-//         super.setUpL1();
-//         super.setUpL2();
-//         super.setUpPostInstallation();
-//     }
+contract AAB_InitTests is AABBase {
+    function test_initialize() public {
+        assertEq(address(parentBridge.dao()), address(parentDao));
+        assertEq(address(childBridge.dao()), address(childDao));
+        assertEq(address(childBridge.parentDao()), address(parentDao));
+    }
 
-//     function test_initialize() public {
-//         assertEq(address(plugin.dao()), address(dao));
-//         // assertEq(plugin.number(), NUMBER);
-//     }
+    function test_reverts_if_reinitialized() public {
+        ParentBridge.BridgeSettings memory parentBridgeSettings = ParentBridge.BridgeSettings({
+            chainId: 1, // child is on mainnet
+            bridge: address(mainnetBridge), // we are on polygon
+            childDAO: address(childDao), // child dao
+            childPlugin: address(childBridge) // child plugin
+        });
 
-//     function test_reverts_if_reinitialized() public {
-//         L1MajorityVotingBase.VotingSettings memory votingSettings = L1MajorityVotingBase.VotingSettings(
-//             L1MajorityVotingBase.VotingMode.VoteReplacement, uint32(0), uint32(1), uint64(1), uint256(0)
-//         );
-//         vm.expectRevert("Initializable: contract is already initialized");
-//         plugin.initialize(dao, votingSettings, l1governanceERC20Base);
-//     }
+        vm.expectRevert("Initializable: contract is already initialized");
+        parentBridge.initialize(parentDao, parentBridgeSettings);
+
+        vm.expectRevert("Initializable: contract is already initialized");
+        childBridge.initialize(childDao, polygonBridge);
+    }
+}
+
+contract AAB_ExecuteChildFromParent is AABBase {
+    function test_execute_child() public {
+        IDAO.Action[] memory actions = new IDAO.Action[](1);
+        actions[0] = IDAO.Action({
+            to: address(weth),
+            value: 0,
+            data: abi.encodeCall(ERC20.transfer, (bob, 10 ether))
+        });
+
+        vm.prank(address(parentDao));
+        parentBridge.bridgeAction({
+            _metadata: abi.encodePacked("Transfer 10 WETH to Bob"),
+            _actions: actions,
+            _allowFailureMap: 0
+        });
+
+        assertEq(weth.balanceOf(bob), 10 ether);
+    }
+}
 
 //     function test_FirstProposalBeingBridged() public {
 //         console2.log(address(dao));

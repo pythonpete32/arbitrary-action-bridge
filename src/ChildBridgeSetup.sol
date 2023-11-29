@@ -22,23 +22,24 @@ contract ChildBridgeSetup is PluginSetup {
     /// @notice The address of the `ChildBridge` base contract.
     ChildBridge private immutable childBridgeBase;
 
+    constructor() {
+        childBridgeBase = new ChildBridge();
+    }
+
     /// @inheritdoc IPluginSetup
     function prepareInstallation(
         address _dao,
         bytes calldata _data
     ) external returns (address plugin, PreparedSetupData memory preparedSetupData) {
-        (ILayerZeroEndpoint lzBridge, address parentDAO) = abi.decode(
-            _data,
-            (ILayerZeroEndpoint, address)
-        );
+        ILayerZeroEndpoint lzBridge = abi.decode(_data, (ILayerZeroEndpoint));
 
         plugin = createERC1967Proxy(
             address(childBridgeBase),
-            abi.encodeCall(ChildBridge.initialize, (IDAO(_dao), lzBridge, parentDAO))
+            abi.encodeCall(ChildBridge.initialize, (IDAO(_dao), lzBridge))
         );
 
         PermissionLib.MultiTargetPermission[]
-            memory permissions = new PermissionLib.MultiTargetPermission[](1);
+            memory permissions = new PermissionLib.MultiTargetPermission[](2);
 
         permissions[0] = PermissionLib.MultiTargetPermission({
             operation: PermissionLib.Operation.Grant,
@@ -46,6 +47,14 @@ contract ChildBridgeSetup is PluginSetup {
             who: plugin,
             condition: PermissionLib.NO_CONDITION,
             permissionId: DAO(payable(_dao)).EXECUTE_PERMISSION_ID()
+        });
+
+        permissions[1] = PermissionLib.MultiTargetPermission({
+            operation: PermissionLib.Operation.Grant,
+            where: plugin,
+            who: _dao,
+            condition: PermissionLib.NO_CONDITION,
+            permissionId: childBridgeBase.SET_PARENT_DAO_ROLE()
         });
 
         preparedSetupData.permissions = permissions;
@@ -56,7 +65,7 @@ contract ChildBridgeSetup is PluginSetup {
         address _dao,
         SetupPayload calldata _payload
     ) external view returns (PermissionLib.MultiTargetPermission[] memory permissions) {
-        permissions = new PermissionLib.MultiTargetPermission[](1);
+        permissions = new PermissionLib.MultiTargetPermission[](2);
 
         permissions[0] = PermissionLib.MultiTargetPermission({
             operation: PermissionLib.Operation.Revoke,
@@ -65,6 +74,14 @@ contract ChildBridgeSetup is PluginSetup {
             condition: PermissionLib.NO_CONDITION,
             permissionId: DAO(payable(_dao)).EXECUTE_PERMISSION_ID()
         });
+
+        permissions[1] = PermissionLib.MultiTargetPermission({
+            operation: PermissionLib.Operation.Revoke,
+            where: _payload.plugin,
+            who: _dao,
+            condition: PermissionLib.NO_CONDITION,
+            permissionId: childBridgeBase.SET_PARENT_DAO_ROLE()
+        });
     }
 
     /// @inheritdoc IPluginSetup
@@ -72,10 +89,7 @@ contract ChildBridgeSetup is PluginSetup {
         return address(childBridgeBase);
     }
 
-    function encodeSettings(
-        ILayerZeroEndpoint lzBridge,
-        address parentDAO
-    ) external pure returns (bytes memory) {
-        return abi.encode(lzBridge, parentDAO);
+    function encodeSetupData(ILayerZeroEndpoint lzBridge) external pure returns (bytes memory) {
+        return abi.encode(lzBridge);
     }
 }
